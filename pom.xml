@@ -103,6 +103,7 @@
 
 	<modules>
 		<module>signup-service</module>
+		<module>signup-integration-api</module>
     </modules>
 
 	<profiles>

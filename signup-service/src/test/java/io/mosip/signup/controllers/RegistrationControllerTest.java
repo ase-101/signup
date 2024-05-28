@@ -3,6 +3,7 @@ package io.mosip.signup.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mosip.esignet.core.dto.RequestWrapper;
 import io.mosip.esignet.core.util.IdentityProviderUtil;
+import io.mosip.signup.api.util.ProfileCreateUpdateStatus;
 import io.mosip.signup.dto.*;
 import io.mosip.signup.exception.CaptchaException;
 import io.mosip.signup.exception.ChallengeFailedException;
@@ -31,10 +32,11 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static io.mosip.esignet.core.constants.Constants.UTC_DATETIME_PATTERN;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -97,6 +99,7 @@ public class RegistrationControllerTest {
         verifyRequestWrapper.setRequestTime(IdentityProviderUtil.getUTCDateTime());
         verifyRequestWrapper.setRequest(verifyChallengeRequest);
     }
+
     @Test
     public void doVerifyChallenge_thenPass() throws Exception {
         String mockTransactionID = "123456789";
@@ -583,7 +586,7 @@ public class RegistrationControllerTest {
     public void doGetRegistrationStatus_returnCompletedResponse() throws Exception {
         String mockTransactionID = "123456789";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
         RegistrationStatusResponse response = new RegistrationStatusResponse();
         response.setStatus(registrationTransaction.getRegistrationStatus());
 
@@ -599,7 +602,7 @@ public class RegistrationControllerTest {
     public void doGetRegistrationStatus_returnPendingResponse() throws Exception {
         String mockTransactionID = "123456789";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.PENDING);
         RegistrationStatusResponse response = new RegistrationStatusResponse();
         response.setStatus(registrationTransaction.getRegistrationStatus());
 
@@ -615,7 +618,7 @@ public class RegistrationControllerTest {
     public void doGetRegistrationStatus_returnFailedResponse() throws Exception {
         String mockTransactionID = "123456789";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.FAILED);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.FAILED);
         RegistrationStatusResponse response = new RegistrationStatusResponse();
         response.setStatus(registrationTransaction.getRegistrationStatus());
 
@@ -631,13 +634,13 @@ public class RegistrationControllerTest {
     @Test
     public void register_thenPass() throws Exception{
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -663,15 +666,13 @@ public class RegistrationControllerTest {
     @Test
     public void register_withNullConsent_returnErrorResponse() throws Exception{
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ"));
-        userInfo.setFullName(fullNames);
-        userInfo.setPhone("+85512345678");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "+85512345678");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
 
@@ -695,13 +696,13 @@ public class RegistrationControllerTest {
     @Test
     public void register_withUnsupportedConsent_returnErrorResponse() throws Exception{
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("not agree");
@@ -725,14 +726,13 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withInvalidPhoneNumber_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
-        userInfo.setPhone("+8551234567890");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "+8551234567890");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -756,13 +756,12 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withNullPhoneNumber_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -787,13 +786,13 @@ public class RegistrationControllerTest {
     @Test
     public void register_withBlankPhoneNumber_returnErrorResponse() throws Exception{
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
-        userInfo.setPhone("");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2923");
         registerRequest.setConsent("AGREE");
@@ -817,13 +816,12 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withNullPreferredLang_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
-        userInfo.setPhone("+855123456789");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -847,13 +845,13 @@ public class RegistrationControllerTest {
     @Test
     public void register_withBlankPreferredLang_returnErrorResponse() throws Exception{
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -877,14 +875,13 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withUnsupportedPreferredLang_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("usa");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","usa");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "អាន បញ្ញារិទ្ធ")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -908,13 +905,12 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withNullFullName_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -938,14 +934,13 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withInvalidFullNameInKhm_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("khm", "qkITAu9BW5hfiZcLCwPuefQqu6QIthy2J9R")));
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("khm", "qkITAu9BW5hfiZcLCwPuefQqu6QIthy2J9R")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -970,16 +965,15 @@ public class RegistrationControllerTest {
     @Test
     public void register_withValidFullNameInKhmAndInvalidFullNameInEng_returnErrorResponse() throws Exception{
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"));
-        fullNames.add(new LanguageTaggedValue("eng", "qkITAu9BW5hfiZcLCwPuefQqu6QIthy2J9R"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"),
+                new LanguageTaggedValue("khm", "qkITAu9BW5hfiZcLCwPuefQqu6QIthy2J9R")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -1003,16 +997,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withInValidFullNameInKhm_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "Mengleang Ngoun"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "Mengleang Ngoun")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -1040,16 +1032,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withValidFullName_returnSuccessResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "សុខ សាន្ត"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "សុខ សាន្ត")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");
         registerRequest.setConsent("AGREE");
@@ -1074,16 +1064,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withInvalidPassword_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("12345678");
         registerRequest.setConsent("AGREE");
@@ -1112,16 +1100,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withBlankPassword_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setConsent("AGREE");
         registerRequest.setPassword("");
@@ -1151,16 +1137,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withNullPassword_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+85512345678");
         registerRequest.setConsent("AGREE");
         registerRequest.setLocale(locale);
@@ -1189,16 +1173,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withBlankUsername_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setConsent("AGREE");
         registerRequest.setPassword("Password@2023");
         registerRequest.setUsername("");
@@ -1226,16 +1208,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withNullUsername_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+855123456789");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "ងន់ ម៉េងលាង")));
+        userInfo.put("phone", "+855123456789");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setConsent("AGREE");
         registerRequest.setPassword("Password@2023");
         registerRequest.setLocale(locale);
@@ -1263,16 +1243,14 @@ public class RegistrationControllerTest {
 
     @Test
     public void register_withNotMatchUsernameRegex_returnErrorResponse() throws Exception{
-
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPhone("+85512345678");
-        userInfo.setPreferredLang("khm");
-        List<LanguageTaggedValue> fullNames = new ArrayList<>();
-        fullNames.add(new LanguageTaggedValue("khm", "Mengleang Ngoun"));
-        userInfo.setFullName(fullNames);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(
+                new LanguageTaggedValue("khm", "Mengleang Ngoun")));
+        userInfo.put("phone", "+85512345678");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setConsent("AGREE");
         registerRequest.setUsername("+85512345678");
         registerRequest.setPassword("Password@2023");

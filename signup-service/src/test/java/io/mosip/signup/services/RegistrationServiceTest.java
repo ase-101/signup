@@ -2,6 +2,7 @@ package io.mosip.signup.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mosip.esignet.core.util.IdentityProviderUtil;
+import io.mosip.signup.api.util.ProfileCreateUpdateStatus;
 import io.mosip.signup.dto.*;
 import io.mosip.signup.exception.*;
 import io.mosip.signup.exception.ChallengeFailedException;
@@ -10,7 +11,6 @@ import io.mosip.signup.helper.CryptoHelper;
 import io.mosip.signup.helper.NotificationHelper;
 import io.mosip.signup.util.ErrorConstants;
 import io.mosip.signup.util.Purpose;
-import io.mosip.signup.util.RegistrationStatus;
 import io.mosip.signup.exception.SignUpException;
 import io.mosip.signup.util.SignUpConstants;
 import org.junit.Assert;
@@ -27,14 +27,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 
 import static org.mockito.Mockito.*;
 
@@ -45,7 +42,6 @@ import javax.servlet.http.HttpServletResponse;
 import io.mosip.esignet.core.exception.EsignetException;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @RunWith(SpringRunner.class)
@@ -85,13 +81,10 @@ public class RegistrationServiceTest {
 
     private String locale = "khm";
 
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Before
     public void setUp() {
-        ReflectionTestUtils.setField(registrationService, identityEndpoint, identityEndpoint);
-        ReflectionTestUtils.setField(registrationService, generateHashEndpoint, generateHashEndpoint);
-        ReflectionTestUtils.setField(registrationService, getUinEndpoint, getUinEndpoint);
-        ReflectionTestUtils.setField(registrationService, getRegistrationStatusEndpoint, getRegistrationStatusEndpoint);
         ReflectionTestUtils.setField(
                 registrationService, "resendAttempts", 3);
         ReflectionTestUtils.setField(
@@ -100,9 +93,7 @@ public class RegistrationServiceTest {
                 registrationService, "resendDelay", 30);
         ReflectionTestUtils.setField(
                 registrationService, "challengeTimeout", 60);
-        ReflectionTestUtils.setField(registrationService, getIdentityEndpoint, getIdentityEndpoint);
-        ReflectionTestUtils.setField(registrationService, "objectMapper", new ObjectMapper());
-        ReflectionTestUtils.setField(registrationService, "otpLength", 6);
+        ReflectionTestUtils.setField(registrationService, "objectMapper", objectMapper);
     }
 
     @Test
@@ -817,13 +808,13 @@ public class RegistrationServiceTest {
     public void register_thenPass() throws SignUpException {
         String local = "khm";
 
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang" , "khm");
+        userInfo.put("fullName" , List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone" , "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -831,9 +822,9 @@ public class RegistrationServiceTest {
 
         String mockTransactionID = "123456789";
 
-        RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(userInfo.getPhone(), Purpose.REGISTRATION);
+        RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction((String) userInfo.get("phone"), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -869,9 +860,6 @@ public class RegistrationServiceTest {
                 any(HttpEntity.class),
                 any(ParameterizedTypeReference.class))).thenReturn(new ResponseEntity<>(mockRestResponseWrapperAddIdentityResponse, HttpStatus.OK));
 
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
-
         RegisterResponse registerResponse = registrationService.register(registerRequest, mockTransactionID);
         Assert.assertNotNull(registerResponse);
         Assert.assertEquals("PENDING", registerResponse.getStatus());
@@ -886,7 +874,7 @@ public class RegistrationServiceTest {
         userInfo.setPhone("+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -932,8 +920,8 @@ public class RegistrationServiceTest {
                 any(HttpEntity.class),
                 any(ParameterizedTypeReference.class))).thenReturn(new ResponseEntity<>(mockRestResponseWrapperAddIdentityResponse, HttpStatus.OK));
 
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+        /*when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         RegisterResponse registerResponse = registrationService.register(registerRequest, mockTransactionID);
         Assert.assertNotNull(registerResponse);
@@ -943,13 +931,14 @@ public class RegistrationServiceTest {
     @Test
     public void register_whenUinEndpointResponseNullBody_throwGetUINFailed() throws SignUpException {
         String locale = "eng";
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang" , "khm");
+        userInfo.put("fullName" , List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone" , "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -959,7 +948,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier(registerRequest.getUsername());
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -980,13 +969,14 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenUinEndpointResponseNullUIN_throwGetUINFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang" , "khm");
+        userInfo.put("fullName" , List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone" , "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -996,7 +986,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier(registerRequest.getUsername());
 
         UINResponse uinResponse = new UINResponse();
         uinResponse.setUIN(null);
@@ -1022,13 +1012,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenUinEndpointResponseErrors_throwServerError() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang" , "khm");
+        userInfo.put("fullName" , List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone" , "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1037,7 +1027,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier(registerRequest.getUsername());
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1064,13 +1054,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenUinEndpointResponseWithNullErrors_throwGetUINFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1080,7 +1070,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1104,13 +1094,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenGenerateHashEndpointResponseNullBody_throwHashGenerateFailed() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1120,7 +1110,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1154,13 +1144,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenGenerateHashEndpointResponseErrors_throwServerError() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1170,7 +1160,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1208,13 +1198,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenGenerateHashEndpointResponseNullErrors_throwHashGenerateFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1224,7 +1214,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1260,13 +1250,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenGenerateHashEndpointResponseNullSaltedPassword_throwHashGenerateFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1276,7 +1266,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1315,13 +1305,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenGenerateHashEndpointResponseNullSalt_throwHashGenerateFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1331,7 +1321,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1370,13 +1360,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenAddIdentityEndpointResponseNullBody_throwAddIdentityFailed() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1386,7 +1376,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1430,13 +1420,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenAddIdentityEndpointResponseStatusNotEqualsACTIVATED_throwAddIdentityFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1444,9 +1434,9 @@ public class RegistrationServiceTest {
 
         String mockTransactionID = "123456789";
 
-        RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(userInfo.getPhone(), Purpose.REGISTRATION);
+        RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction((String) userInfo.get("phone"), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1492,13 +1482,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenAddIdentityEndpointResponseErrors_throwServerError() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1508,7 +1498,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1556,13 +1546,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_whenAddIdentityEndpointResponseNullErrors_throwAddIdentityFailed() throws SignUpException{
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1572,7 +1562,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1619,13 +1609,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_withInvalidTransaction_throwInvalidTransaction() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1643,13 +1633,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_withInvalidUsername_throwIdentifierMismatch() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855321444123");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("AGREE");
@@ -1659,7 +1649,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1674,13 +1664,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_withInvalidConsent_throwConsentRequired() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("DISAGREE");
@@ -1690,7 +1680,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.REGISTRATION);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1705,13 +1695,13 @@ public class RegistrationServiceTest {
 
     @Test
     public void register_with_ResetPasswordPurposeTransaction_throwUnsupportedPurpose() throws SignUpException {
-        UserInfoMap userInfo = new UserInfoMap();
-        userInfo.setPreferredLang("khm");
-        userInfo.setFullName(List.of(new LanguageTaggedValue("eng", "Panharith AN")));
-        userInfo.setPhone("+855219718732");
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("preferredLang","khm");
+        userInfo.put("fullName", List.of(new LanguageTaggedValue("eng", "Panharith AN")));
+        userInfo.put("phone", "+855219718732");
 
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setUserInfo(userInfo);
+        registerRequest.setUserInfo(objectMapper.valueToTree(userInfo));
         registerRequest.setUsername("+855219718732");
         registerRequest.setPassword("123123");
         registerRequest.setConsent("DISAGREE");
@@ -1721,7 +1711,7 @@ public class RegistrationServiceTest {
 
         RegistrationTransaction mockRegistrationTransaction = new RegistrationTransaction(registerRequest.getUsername(), Purpose.RESET_PASSWORD);
         mockRegistrationTransaction.setChallengeHash("123456");
-        mockRegistrationTransaction.setIdentifier(userInfo.getPhone());
+        mockRegistrationTransaction.setIdentifier((String) userInfo.get("phone"));
 
         when(cacheUtilService.getChallengeVerifiedTransaction(mockTransactionID))
                 .thenReturn(mockRegistrationTransaction);
@@ -1747,8 +1737,8 @@ public class RegistrationServiceTest {
         when(challengeManagerService.generateChallenge(any())).thenReturn("1111");
         when(googleRecaptchaValidatorService.validateCaptcha(
                 generateChallengeRequest.getCaptchaToken())).thenReturn(true);
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+     /*   when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         GenerateChallengeResponse generateChallengeResponse =
                 registrationService.generateChallenge(
@@ -1767,8 +1757,8 @@ public class RegistrationServiceTest {
         when(challengeManagerService.generateChallenge(any())).thenReturn("1111");
         when(googleRecaptchaValidatorService.validateCaptcha(
                 generateChallengeRequest.getCaptchaToken())).thenReturn(true);
-        when(notificationHelper.sendSMSNotification(any(), any(), any(), any()))
-                .thenThrow(new RestClientException("failed to send notification"));
+       /* when(notificationHelper.sendSMSNotification(any(), any(), any(), any()))
+                .thenThrow(new RestClientException("failed to send notification"));*/
 
         try{
             registrationService.generateChallenge(generateChallengeRequest, "");
@@ -1795,8 +1785,8 @@ public class RegistrationServiceTest {
         when(challengeManagerService.generateChallenge(transaction)).thenReturn("1111");
         when(googleRecaptchaValidatorService.validateCaptcha(
                 generateChallengeRequest.getCaptchaToken())).thenReturn(true);
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+     /*   when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         GenerateChallengeResponse generateChallengeResponse =
                 registrationService.generateChallenge(
@@ -1821,8 +1811,8 @@ public class RegistrationServiceTest {
         when(challengeManagerService.generateChallenge(transaction)).thenReturn("1111");
         when(googleRecaptchaValidatorService.validateCaptcha(
                 generateChallengeRequest.getCaptchaToken())).thenReturn(true);
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+      /*  when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         GenerateChallengeResponse generateChallengeResponse =
                 registrationService.generateChallenge(
@@ -1973,8 +1963,8 @@ public class RegistrationServiceTest {
         when(challengeManagerService.generateChallenge(any())).thenReturn("1111");
         when(googleRecaptchaValidatorService.validateCaptcha(
                 generateChallengeRequest.getCaptchaToken())).thenReturn(true);
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+     /*   when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         GenerateChallengeResponse generateChallengeResponse =
                 registrationService.generateChallenge(
@@ -1995,8 +1985,8 @@ public class RegistrationServiceTest {
         when(challengeManagerService.generateChallenge(any())).thenReturn("1111");
         when(googleRecaptchaValidatorService.validateCaptcha(
                 generateChallengeRequest.getCaptchaToken())).thenReturn(true);
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+       /* when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         GenerateChallengeResponse generateChallengeResponse =
                 registrationService.generateChallenge(
@@ -2009,39 +1999,39 @@ public class RegistrationServiceTest {
     public void doGetRegistrationStatus_withCompletedTransaction_thenPass() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
         when(cacheUtilService.getStatusCheckTransaction(transactionId)).thenReturn(registrationTransaction);
         when(cacheUtilService.setStatusCheckTransaction(transactionId, registrationTransaction)).thenReturn(registrationTransaction);
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(registrationStatusResponse.getStatus(), RegistrationStatus.COMPLETED);
+        Assert.assertEquals(registrationStatusResponse.getStatus(), ProfileCreateUpdateStatus.COMPLETED);
     }
 
     @Test
     public void doGetRegistrationStatus_withPendingTransaction_thenPass() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.PENDING);
         when(cacheUtilService.getStatusCheckTransaction(transactionId)).thenReturn(registrationTransaction);
         when(cacheUtilService.setStatusCheckTransaction(transactionId, registrationTransaction)).thenReturn(registrationTransaction);
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(registrationStatusResponse.getStatus(), RegistrationStatus.PENDING);
+        Assert.assertEquals(registrationStatusResponse.getStatus(), ProfileCreateUpdateStatus.PENDING);
     }
 
     @Test
     public void doGetRegistrationStatus_withFailedTransaction_thenPass() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.FAILED);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.FAILED);
         when(cacheUtilService.getStatusCheckTransaction(transactionId)).thenReturn(registrationTransaction);
         when(cacheUtilService.setStatusCheckTransaction(transactionId, registrationTransaction)).thenReturn(registrationTransaction);
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(registrationStatusResponse.getStatus(), RegistrationStatus.FAILED);
+        Assert.assertEquals(registrationStatusResponse.getStatus(), ProfileCreateUpdateStatus.FAILED);
     }
 
     @Test
@@ -2114,12 +2104,12 @@ public class RegistrationServiceTest {
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(new ResponseEntity<>(mockIdentityResponseRestResponseWrapper, HttpStatus.OK));
 
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+      /*  when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         RegistrationStatusResponse registrationStatusResponse = registrationService.updatePassword(resetPasswordRequest,
                 verifiedTransactionId);
-        Assert.assertEquals(RegistrationStatus.PENDING, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.PENDING, registrationStatusResponse.getStatus());
     }
 
     @Test
@@ -2161,12 +2151,12 @@ public class RegistrationServiceTest {
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(new ResponseEntity<>(mockIdentityResponseRestResponseWrapper, HttpStatus.OK));
 
-        when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
-                .thenReturn(new CompletableFuture<>());
+      /*  when(notificationHelper.sendSMSNotificationAsync(any(), any(), any(), any()))
+                .thenReturn(new CompletableFuture<>());*/
 
         RegistrationStatusResponse registrationStatusResponse = registrationService.updatePassword(resetPasswordRequest,
                 verifiedTransactionId);
-        Assert.assertEquals(RegistrationStatus.PENDING, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.PENDING, registrationStatusResponse.getStatus());
     }
 
     @Test
@@ -2375,9 +2365,9 @@ public class RegistrationServiceTest {
     public void doGetRegistrationStatusFromServer_withApplicationID_thenReturnPending() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
-        Map<String, RegistrationStatus> handlesStatus = new LinkedHashMap<>();
-        handlesStatus.put(transactionId, RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
+        Map<String, ProfileCreateUpdateStatus> handlesStatus = new LinkedHashMap<>();
+        handlesStatus.put(transactionId, ProfileCreateUpdateStatus.PENDING);
         registrationTransaction.setHandlesStatus(handlesStatus);
         RestResponseWrapper<Map<String,String>> mockRestResponseWrapper = new RestResponseWrapper<>();
         Map<String,String> response = new LinkedHashMap<>();
@@ -2397,16 +2387,16 @@ public class RegistrationServiceTest {
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(RegistrationStatus.PENDING, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.PENDING, registrationStatusResponse.getStatus());
     }
 
     @Test
     public void doGetRegistrationStatusFromServer_withApplicationID_thenReturnCompleted() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
-        Map<String, RegistrationStatus> handlesStatus = new LinkedHashMap<>();
-        handlesStatus.put(transactionId, RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
+        Map<String, ProfileCreateUpdateStatus> handlesStatus = new LinkedHashMap<>();
+        handlesStatus.put(transactionId, ProfileCreateUpdateStatus.PENDING);
         registrationTransaction.setHandlesStatus(handlesStatus);
         RestResponseWrapper<Map<String,String>> mockRestResponseWrapper = new RestResponseWrapper<>();
         Map<String,String> response = new LinkedHashMap<>();
@@ -2426,16 +2416,16 @@ public class RegistrationServiceTest {
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(RegistrationStatus.COMPLETED, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.COMPLETED, registrationStatusResponse.getStatus());
     }
 
     @Test
     public void doGetRegistrationStatusFromServer_withApplicationID_thenReturnFailed() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
-        Map<String, RegistrationStatus> handlesStatus = new LinkedHashMap<>();
-        handlesStatus.put(transactionId, RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
+        Map<String, ProfileCreateUpdateStatus> handlesStatus = new LinkedHashMap<>();
+        handlesStatus.put(transactionId, ProfileCreateUpdateStatus.PENDING);
         registrationTransaction.setHandlesStatus(handlesStatus);
         RestResponseWrapper<Map<String,String>> mockRestResponseWrapper = new RestResponseWrapper<>();
         Map<String,String> response = new LinkedHashMap<>();
@@ -2455,16 +2445,16 @@ public class RegistrationServiceTest {
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(RegistrationStatus.FAILED, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.FAILED, registrationStatusResponse.getStatus());
     }
 
     @Test
     public void doGetRegistrationStatusFromServer_withNullRegistrationStatus_thenReturnPending() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
-        Map<String, RegistrationStatus> handlesStatus = new LinkedHashMap<>();
-        handlesStatus.put(transactionId, RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
+        Map<String, ProfileCreateUpdateStatus> handlesStatus = new LinkedHashMap<>();
+        handlesStatus.put(transactionId, ProfileCreateUpdateStatus.PENDING);
         registrationTransaction.setHandlesStatus(handlesStatus);
 
         when(cacheUtilService.getStatusCheckTransaction(transactionId)).thenReturn(registrationTransaction);
@@ -2480,16 +2470,16 @@ public class RegistrationServiceTest {
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(RegistrationStatus.PENDING, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.PENDING, registrationStatusResponse.getStatus());
     }
 
     @Test
     public void doGetRegistrationStatusFromServer_withNullResponseBodyRegistrationStatus_thenReturnPending() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
-        Map<String, RegistrationStatus> handlesStatus = new LinkedHashMap<>();
-        handlesStatus.put(transactionId, RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
+        Map<String, ProfileCreateUpdateStatus> handlesStatus = new LinkedHashMap<>();
+        handlesStatus.put(transactionId, ProfileCreateUpdateStatus.PENDING);
         registrationTransaction.setHandlesStatus(handlesStatus);
         RestResponseWrapper<Map<String,String>> mockRestResponseWrapper = new RestResponseWrapper<>();
         mockRestResponseWrapper.setResponse(null);
@@ -2507,16 +2497,16 @@ public class RegistrationServiceTest {
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(RegistrationStatus.PENDING, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.PENDING, registrationStatusResponse.getStatus());
     }
 
     @Test
     public void doGetRegistrationStatusFromServer_withEmptyStatusCode_thenReturnPending() {
         String transactionId = "TRAN-1234";
         RegistrationTransaction registrationTransaction = new RegistrationTransaction("+85577410541", Purpose.REGISTRATION);
-        registrationTransaction.setRegistrationStatus(RegistrationStatus.COMPLETED);
-        Map<String, RegistrationStatus> handlesStatus = new LinkedHashMap<>();
-        handlesStatus.put(transactionId, RegistrationStatus.PENDING);
+        registrationTransaction.setRegistrationStatus(ProfileCreateUpdateStatus.COMPLETED);
+        Map<String, ProfileCreateUpdateStatus> handlesStatus = new LinkedHashMap<>();
+        handlesStatus.put(transactionId, ProfileCreateUpdateStatus.PENDING);
         registrationTransaction.setHandlesStatus(handlesStatus);
         RestResponseWrapper<Map<String,String>> mockRestResponseWrapper = new RestResponseWrapper<>();
         Map<String,String> response = new LinkedHashMap<>();
@@ -2536,6 +2526,6 @@ public class RegistrationServiceTest {
         RegistrationStatusResponse registrationStatusResponse = registrationService.getRegistrationStatus(transactionId);
 
         Assert.assertNotNull(registrationStatusResponse);
-        Assert.assertEquals(RegistrationStatus.PENDING, registrationStatusResponse.getStatus());
+        Assert.assertEquals(ProfileCreateUpdateStatus.PENDING, registrationStatusResponse.getStatus());
     }
 }
