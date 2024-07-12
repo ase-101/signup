@@ -23,6 +23,8 @@ import javax.validation.constraints.NotBlank;
 
 import org.springframework.web.bind.annotation.RestController;
 
+import java.beans.PropertyEditorSupport;
+
 import static io.mosip.signup.util.SignUpConstants.EMTPY;
 
 @Slf4j
